@@ -1,0 +1,267 @@
+
+'''
+Created on April 16, 2019
+
+@author:   Joseph Ballai
+Partner:   Jackson Brown
+
+Username:  jballai
+
+Pledge:    I pledge my honor that I have abided by the Stevens Honor System.
+
+CS115 - Hw 10
+'''
+
+PREF_FILE = 'musicrecplus.txt'
+
+def main():
+    '''Takes in a username and user_map. Displays the abilities of the music
+    recommender to the user. Allows him to select an option to execute.
+    Calls a function to execute the selected option and then displays all the
+    possible options once again repeatedly until the user quits the program.''' 
+    dictionary = load_users(PREF_FILE)
+    username = input('Enter your name (put a $ symbol after your name if you wish your preferences to remain private):')
+    if username not in dictionary:
+        get_preferences(username, dictionary, PREF_FILE)
+    menu(username, dictionary)
+    
+def load_users(fileName):
+    '''Takes in a filename and loads a database users and their preferred artist
+    in the form "FirstName LastName:Artist1,Artist2,Artist3..." from this file.
+    Returns a mapping of usernames to their preferred artists.'''
+    dict = {}
+    try:
+        file = open(fileName, 'r')
+    except:
+        file = open(fileName, 'w')
+        file.close()
+        return dict
+    for line in file:
+        if line == '\n':
+            pass
+        else:
+            user, artists = line.split(':')
+            artists = artists.split(',')
+            dict[user] = []
+            for x in artists:
+                if x[-1] == '\n':
+                    x = x[:-1]
+                dict[user].append(x)
+    file.close()
+    return dict
+
+def get_preferences(user, dict, filename):
+    '''Takes in a username and user_map. Asks the user to input their preferences
+    (indicating completion of input by pressing the enter key (entering the empty
+    string). Makes a list of these preferences and then sorts the list. Stores
+    the preferences in a dictionary called user_dict by the key of the input username.'''
+    artists = []
+    new_pref = input('Enter an artist that you like (Enter to finish):')
+    while new_pref != '':
+        artists.append(new_pref)
+        new_pref = input('Enter an artist that you like (Enter to finish):')
+    artists.sort()
+    save(user, dict, filename, artists)
+    return artists
+
+def save(user, dict, filename, prefs):
+    '''Takes in a username, prefs, a user_map, and a filename.
+    Writes all of the user preferences to the file. Returns nothing.'''
+    dict[user] = prefs
+    file = open(filename, 'w')
+    new_lines = []
+    for user in dict:
+        new_lines.append(str(user)+':' + ','.join(dict[user]) + '\n')
+    new_lines.sort()
+    for x in new_lines:
+        file.write(x)
+    file.close()
+    
+def menu(user, dict):
+    '''Takes in a username and user_map. Displays the abilities of the music
+    recommender to the user. Allows him to select an option to execute.
+    Calls a function to execute the selected option and then displays all the
+    possible options once again repeatedly until the user quits the program.''' 
+    while True:
+        print('Enter a letter to choose an option:\ne - Enter preferences\nr - Get recommendations\np - Show most popular artists\nh - How popular is the most popular\nm - Which user has the most likes\nq - Save and quit')
+        choice = input()
+        if choice is 'e':
+            get_preferences(user, dict, PREF_FILE)
+        elif choice is 'r':
+            prefs = dict[user]
+            recs = get_recommendations(dict, user, prefs)
+            print_recs(recs, user)
+            save(user, dict, PREF_FILE, prefs)
+        elif choice is 'p':
+            best = pop_artist(dict, 'people')
+            print_pop_artists(best)
+        elif choice is 'h':
+            how_popular(dict)
+        elif choice is 'm':
+            most_likes(dict)
+        elif choice is 'q':
+            try:
+                save(user, dict, PREF_FILE, dict[user])
+                break
+            except:
+                break
+            
+def get_recommendations(dict, user, prefs):
+    '''Takes in a current user, preferences, and a user_map. Finds the user
+    whose likes are most similar to that of the current user (without being 
+    exactly the same. Returns artist recommendations for the current user
+    based on whatever artists are liked by the most similar user that are
+    not already liked by the current user.'''
+    best_users = []
+    best_score = 0
+    for name in dict:
+        if name[-1] == '$':
+            continue
+        if dict[user] != dict[name]:
+            currentprefs = dict[user]
+            mainprefs = dict[name]
+            matches = 0
+            currentprefs.sort()
+            mainprefs.sort()
+            i = 0
+            j = 0
+            while i < len(currentprefs) and j < len(mainprefs):
+                if currentprefs[i] == mainprefs[j]:
+                    matches += 1
+                    i += 1
+                    j += 1
+                elif currentprefs[i] < mainprefs[j]:
+                    i += 1
+                else:
+                    j += 1
+            if matches > best_score:
+                best_score = matches
+                best_users = [name]
+            if matches == best_score:
+                best_users.append(name)
+    list_of_recs = []
+    
+    def drop_matches(lst1, lst2):
+        '''Takes in two lists. Returns a list that contains no matches between
+        elements of list1 and list2.'''
+        lst1.sort()
+        lst2.sort()
+        not_matches = []
+        a = b = 0
+        while a < len(lst1) and b < len(lst2):
+            if lst1[a] == lst2[b]:
+                b += 1
+            elif lst1[a] > lst2[b]:
+                not_matches.append(lst2[b])
+                b += 1
+            else:
+                a += 1
+        while b < len(lst2):
+            not_matches.append(lst2[b])
+            b += 1
+        return not_matches
+    
+    def drop_duplicates(lst1):
+        '''Takes in a list. Returns a list with all elements from the original
+        list occurring exactly once.'''
+        lst1.sort()
+        if lst1 == []:
+            not_duplicates = []
+            return not_duplicates
+        not_duplicates = [lst1[0]]
+        a = 0
+        b = 1
+        while a < len(lst1):
+            if a + b == len(lst1):
+                break
+            if lst1[a] == lst1[a+b]:
+                b += 1
+            else:
+                not_duplicates.append(lst1[a+b])
+                a += b
+                b = 1
+        return not_duplicates
+    
+    for x in best_users:
+        for y in dict[x]:
+            if y == '':
+                break
+            if y[-1] == '\n':
+                list_of_recs.append(y[:-1])
+            else:
+                list_of_recs.append(y)
+    return drop_duplicates(drop_matches(dict[user], list_of_recs))
+
+def print_recs(recs, user):
+    '''Prints out the user's list of recommended artists.'''
+    if recs == []:
+        print('No recommendations available at this time')
+    else:
+        print('\n'.join(recs))
+
+def pop_artist(dict, func):
+    '''Takes in a user_map. Prints out the most popular artist or artists.
+    If no artist is found, the user is notified by printing a message telling
+    them that no artists were found.'''
+    pop_artists = {}
+    max_val = 0
+    most_popular = []
+    for user in dict:
+        if user[-1] == '$':
+            continue
+        for x in dict[user]:
+            if x[-1] == '\n':
+                x = x[:-1]
+            if x in pop_artists:
+                pop_artists[x] += 1
+            else:
+                pop_artists[x] = 1
+            if pop_artists[x] > max_val:
+                    max_val = pop_artists[x]
+                    most_popular = [x]
+            elif pop_artists[x] == max_val:
+                most_popular.append(x)
+    
+    if func == 'people':
+        return most_popular
+    elif func == 'num':
+        return max_val
+
+def print_pop_artists(best):
+    '''Prints the list of most popular artists.'''
+    if best == []:
+        print('Sorry, no artists found')
+    if len(best) == 1:
+        print(best[0])
+    else:
+        print('\n'.join(best))
+
+def how_pop_is_most_pop_artist(user_map):
+    '''Takes in a user_map. Prints out how popular (a number) the most popular
+    artist(s) is(are) based on how many users like a given artist.'''
+    best_val = how_pop_is_most_pop_artist(user_map, 'num')
+    if best_val == 0:
+        print('Sorry, no artists found')
+    else:
+        print(str(best_val))
+        
+def best_user(usermap):
+    '''Takes in a user_map. Returns the user with the most likes.'''
+    most_liked_user = []
+    max_likes = 0
+    for user in dict:
+        if user[-1] == '$':
+            continue
+        if len(dict[user]) > max_likes:
+            most_liked_user = [user]
+            max_likes = len(dict[user])
+        elif len(dict[user]) == max_likes:
+            most_liked_user.append(user)
+    if most_liked_user == []:
+        print('Sorry, no user found')
+    elif len(most_liked_user) == 1:
+        print(most_liked_user[0])
+    else:
+        print('\n'.join(most_liked_user))
+        
+main()
